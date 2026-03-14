@@ -10,10 +10,12 @@ First Iteration.
 We got a 68.3% accuracy. We use the ELO Rating and the performance on the last 5 matches as covariates.
 
 
+```
 Random-Football-Expert/
 │
-├── data/ # Original datasets (not modified)
-│  
-├── data.R #Script to build the final dataset
+├── data/          # Original datasets (not modified)
 │
-├── model.R # Script for modelling data (currently using tidymodels)
+├── data.R         # Script that builds the final dataset
+│
+└── model.R        # Script for modelling the data (currently using tidymodels)
+```

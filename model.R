@@ -30,7 +30,8 @@ rf_model <-
     min_n = tune() #the number of observations needed to keep splitting nodes
   ) |>
   set_mode("classification") |>
-  set_engine("ranger")
+  set_engine("ranger",
+             importance = "impurity")
 
 #Formula and set variables as ID so they're not used as predictors
 rf_recipe <- recipe(result ~ ., data = train) |>
@@ -88,5 +89,5 @@ accuracy(
 #68.3% Accuracy!!
 
 #Variable importance
-# importance <- extract_fit_parsnip(rf_fit)
-# vip(importance)
+importance <- extract_fit_parsnip(rf_fit)
+vip(importance)

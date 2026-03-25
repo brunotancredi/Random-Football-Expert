@@ -1,0 +1,50 @@
+\documentclass[12pt,paper=letter,leqno]{scrartcl}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2cm]{geometry}
+\usepackage{makecell,amsmath,amssymb,multirow,float,setspace,mlmodern,lipsum,fancyhdr,lastpage}
+\usepackage[backend=biber, style=authoryear]{biblatex}
+%\addbibresource{Assignment_01.bib}
+
+\makeatletter
+\def\@maketitle{%
+  \newpage%
+  \null%
+  \vskip 2em%
+  \begin{center}%
+    {{\LARGE\textsc{\@title} \par}}%
+    \vskip 1em%
+    {{\large \@subtitle \par}}%
+    \vskip 1.5em%
+    {{\large \lineskip .5em%
+      \begin{tabular}[t]{c}%
+        \@author
+      \end{tabular}\par}}%
+    \vskip 1em%
+    {{\large \@date}}%
+  \end{center}%
+  \par
+  \vskip 1.5em
+}
+\makeatother
+\pagestyle{fancy}
+\fancyfoot[C]{\thepage\ of \pageref{LastPage}}
+\fancyhead[R]{}
+
+\begin{document}
+\title{\lq\lq Total Football\rq\rq: Predicting Football Match Outcomes Using Machine Learning}
+\subtitle{STATS9850B: Advanced Data Analysis}
+\author{Bruno Tancredi and Felipe Ferreira}
+\date{April 21$^\text{st}$, 2026}
+\maketitle
+\thispagestyle{fancy}
+\section{Introduction}
+\section{Data set source and detailed description}
+\section{Methods (description of the methods used in both exploratory and main data analysis)}
+\section{Results}
+\lipsum[1-20]
+\subsection{Exploratory Data Analysis}
+\subsection{Main Data Analysis}
+\section{Conclusion/Discussion}
+\section{References}
+\section{Appendix}
+\end{document}

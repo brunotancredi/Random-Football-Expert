@@ -217,3 +217,10 @@ links <-
     "Northern Mariana Islands" = "https://www.transfermarkt.us/northern-mariana-islands/startseite/verein/28719",
     "Tonga" = "https://www.transfermarkt.com/tonga/startseite/verein/16435",
     "Samoa" = "https://www.transfermarkt.com/samoa/startseite/verein/15235")
+
+
+transfermarkt_countries <- as.data.frame(links)
+transfermarkt_countries <- cbind(country = rownames(transfermarkt_countries), 
+                                 transfermarkt_countries)
+
+write_csv(transfermarkt_countries, "transfermarkt_countries.csv")

@@ -97,7 +97,7 @@ elo_rating <- elo_rating |>
 
 #For now, I will ignore those countries (we lost ~ 400 matches)
 dataset <- dataset |> 
-  mutate(year = year(date)) |>
+  mutate(year = year(date)) |> 
   inner_join(elo_rating, 
             by = join_by(home_team == team, year == year)) |>
   mutate(home_elo_rating = rating) |>
@@ -110,8 +110,8 @@ dataset <- dataset |>
 
 ## Join with transfermarkt
 transfermarkt <- read_csv("data/transfermarkt.csv")
-dataset_2 <- dataset |> #TODO: Change dataset_2 for dataset
-  mutate(year = year(date)) |>
+dataset <- dataset |> 
+  mutate(year = year(date)) |> #TODO: CHANGE TRANSFERMARKT YEAR
   inner_join(
     transfermarkt |>
       rename_with(~ paste0("home_", .x), -c(country,year)), 

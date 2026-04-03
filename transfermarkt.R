@@ -40,7 +40,7 @@ t <- apply(countries[1:5, ], 1, function(country){
         pivot_wider(
           names_from = player_position,
           values_from = c(market_value, age),
-          names_glue = "{player_position}_{.value}"
+          names_glue = "{player_position}_{.value}",
         ) |>
         mutate(country = country[["country"]],
                year = year)
@@ -61,6 +61,45 @@ final_dataframe <- bind_rows(t) |>
   relocate(year) |>
   relocate(country)
 
+#Rename positions
+final_dataframe <- final_dataframe |>
+  pivot_longer(
+    cols = -c(country, year),
+    names_to = c("position", ".value"),
+    names_pattern = "(.+)_(market_value|age)"
+  ) |>
+  mutate(
+    position = recode(
+      position,
+      "attacking_midfield" = "midfielder",
+      "central_midfield" = "midfielder",
+      "centre-back" = "defender",
+      "centre-forward" = "attacker",
+      "defensive_midfield" = "midfielder",
+      "goalkeeper" = "goalkeeper",
+      "left_winger" = "attacker",
+      "left-back" = "defender",
+      "right_winger" = "attacker",
+      "right-back" = "defender",
+      "second_striker" = "attacker",
+      "left_midfield" = "midfielder",
+      "right_midfield" = "midfielder",
+      "striker" = "attacker"
+    )
+  ) |>
+  drop_na() |>
+  group_by(country, year, position) |>
+  summarise(
+    market_value = mean(market_value),
+    age = mean(age)
+  ) |>
+  ungroup() |>
+  pivot_wider(
+    names_from = position,
+    values_from = c(market_value, age),
+    names_glue = "{position}_{.value}"
+  )
+
 
 ## Sanity checks
 
@@ -76,5 +115,5 @@ df |>
   summarize(n = n()) |>
   filter(n < 7)
 
-write_csv(df, "dataset/final_dataframe.csv")
+write_csv(final_dataframe, "data/transfermarkt.csv")
 

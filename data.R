@@ -108,6 +108,20 @@ dataset <- dataset |>
   select(-c(year,rating)) 
 #################
 
+## Join with transfermarkt
+transfermarkt <- read_csv("data/transfermarkt.csv")
+dataset_2 <- dataset |> #TODO: Change dataset_2 for dataset
+  mutate(year = year(date)) |>
+  inner_join(
+    transfermarkt |>
+      rename_with(~ paste0("home_", .x), -c(country,year)), 
+    by = join_by(home_team == country, year == year)) |>
+  inner_join(
+    transfermarkt |>
+      rename_with(~ paste0("away_", .x), -c(country,year)), 
+    by = join_by(away_team == country, year == year))
+#####
+
 #Now we are ready for export
 
 #Only for better reading I will put the response at the end

@@ -61,5 +61,20 @@ final_dataframe <- bind_rows(t) |>
   relocate(year) |>
   relocate(country)
 
-write_csv(final_dataframe, "transfermarkt.csv")
+
+## Sanity checks
+
+#Contries for which we don't have data
+no_data <- countries |> 
+  left_join(df) |>
+  filter(is.na(year)) |>
+  select(country)
+
+#Contries for which we have data but not all the years
+df |>
+  group_by(country) |>
+  summarize(n = n()) |>
+  filter(n < 7)
+
+write_csv(df, "dataset/final_dataframe.csv")
 

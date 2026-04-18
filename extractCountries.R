@@ -32,7 +32,7 @@ links <-
     "Poland" = "https://www.transfermarkt.com/poland/startseite/verein/3442",
     "Uruguay" = "https://www.transfermarkt.com/uruguay/startseite/verein/3449",
     "Iran" = "https://www.transfermarkt.com/iran/startseite/verein/3582",
-    "Argentine" = "https://www.transfermarkt.com/argentina/startseite/verein/3437",
+    "Argentina" = "https://www.transfermarkt.com/argentina/startseite/verein/3437",
     "Nigeria" = "https://www.transfermarkt.com/kazakhstan-u21/startseite/verein/3444",
     "Serbia" = "https://www.transfermarkt.com/serbien/startseite/verein/3438",
     "England" = "https://www.transfermarkt.com/england/startseite/verein/3299",
@@ -223,4 +223,4 @@ transfermarkt_countries <- as.data.frame(links)
 transfermarkt_countries <- cbind(country = rownames(transfermarkt_countries), 
                                  transfermarkt_countries)
 
-write_csv(transfermarkt_countries, "transfermarkt_countries.csv")
+write_csv(transfermarkt_countries, "data/transfermarkt_countries.csv")

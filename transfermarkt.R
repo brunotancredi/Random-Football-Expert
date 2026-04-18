@@ -3,18 +3,18 @@ library(logr)
 
 devtools::load_all("../worldfootballR")
 
-countries <- read_csv("transfermarkt_countries.csv")
-years <- 2018:2025
+countries <- read_csv("data/transfermarkt_countries.csv")
+years <- 2017:2025
 
 tmp <- file.path(getwd(), "test.log")
 
 lf <- log_open(tmp)
 final_df <- data.frame()
 
-t <- apply(countries[1:5, ], 1, function(country){
+t <- apply(countries, 1, function(country){
   rows <- list()
   i <- 1
-  for( year in years[1:2]){
+  for( year in years){
     tryCatch({
       link <- paste0(country["links"], "/saison_id/", year)
       print(sprintf(
@@ -105,15 +105,15 @@ final_dataframe <- final_dataframe |>
 
 #Contries for which we don't have data
 no_data <- countries |> 
-  left_join(df) |>
+  left_join(final_dataframe) |>
   filter(is.na(year)) |>
   select(country)
 
 #Contries for which we have data but not all the years
-df |>
+final_dataframe |>
   group_by(country) |>
   summarize(n = n()) |>
   filter(n < 7)
 
-write_csv(final_dataframe, "data/transfermarkt.csv")
+write_csv(final_dataframe, "data/transfermarkt_2017.csv")
 

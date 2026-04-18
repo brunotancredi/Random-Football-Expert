@@ -11,8 +11,20 @@ matches <- read_csv("matches.csv")
 #Use diff of points on the last 5 matches and ELO difference
 matches <- matches |>
   mutate(elo_rating_diff = home_elo_rating - away_elo_rating,
-         last_5_games_diff = home_team_last_5_games - away_team_last_5_games) |>
-  select(date, home_team, away_team, elo_rating_diff, last_5_games_diff, result)
+         last_5_games_diff = home_team_last_5_games - away_team_last_5_games,
+         goalkeeper_market_value_diff = home_goalkeeper_market_value - away_goalkeeper_market_value,
+         defender_market_value_diff = home_defender_market_value - away_defender_market_value,
+         midfielder_marker_value_diff = home_midfielder_market_value - away_midfielder_market_value,
+         attacker_market_value_diff = home_attacker_market_value - away_attacker_market_value,
+         goalkeeper_age_diff = home_goalkeeper_age - away_goalkeeper_age,
+         defender_age_diff = home_defender_age - away_defender_age,
+         midfielder_age_diff = home_midfielder_age - away_midfielder_age,
+         attacker_age_diff = home_attacker_age - away_attacker_age) |>
+  select(date, 
+         home_team, 
+         away_team, 
+         ends_with("diff"),
+         result)
 
 
 ##### Modelling 

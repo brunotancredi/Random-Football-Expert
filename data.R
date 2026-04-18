@@ -1,5 +1,6 @@
 library(tidyverse)
 library(zoo)
+library(purrr)
 
 #Load results.csv (football matches from 1872 to 2026)
 matches <- read_csv("data/results.csv")
@@ -109,9 +110,46 @@ dataset <- dataset |>
 #################
 
 ## Join with transfermarkt
-transfermarkt <- read_csv("data/transfermarkt.csv")
+transfermarkt <- read_csv("data/transfermarkt.csv") |>
+  mutate(across(ends_with('_value') & where(is.numeric), ~replace_na(., 100000))) |> #Replace empty market value by 100,000
+  mutate(across(ends_with('_age') & where(is.numeric), ~replace_na(., 25))) |> #Replace empty age value by 25 |>
+  mutate(year = year + 1) #Same reason than ELO, we move age 1 year.
+
+#Combination of all possible combinations of country years
+years <- expand.grid(country = unique(transfermarkt$country), year = 2018:2026)
+
+#Join with all the combinations too add combinations that are missing
+transfermarkt_full <- years |>
+  left_join(transfermarkt, by = join_by(country == country, year == year))
+
+#Function to fill for the missing years
+fill_nearest <- function(x, year) {
+  miss <- is.na(x)
+  obs <- which(!miss)
+  
+  x[miss] <- map_dbl(which(miss), function(i) {
+    nearest <- obs[which.min(abs(year[obs] - year[i]))]
+    x[nearest]
+  })
+  
+  x
+}
+
+# Fill the missing years
+transfermarkt <- transfermarkt_full |>
+  group_by(country) |>
+  complete(year = full_seq(year, 1)) |>
+  arrange(country, year) |>
+  mutate(
+    across(
+      where(is.numeric) & !all_of("year"),
+      ~ fill_nearest(., year)
+    )
+  ) |>
+  ungroup()
+
 dataset <- dataset |> 
-  mutate(year = year(date)) |> #TODO: CHANGE TRANSFERMARKT YEAR
+  mutate(year = year(date)) |> 
   inner_join(
     transfermarkt |>
       rename_with(~ paste0("home_", .x), -c(country,year)), 
@@ -119,7 +157,8 @@ dataset <- dataset |>
   inner_join(
     transfermarkt |>
       rename_with(~ paste0("away_", .x), -c(country,year)), 
-    by = join_by(away_team == country, year == year))
+    by = join_by(away_team == country, year == year)) |>
+  select(-c(year))
 #####
 
 #Now we are ready for export
@@ -129,4 +168,3 @@ dataset <- dataset |>
   relocate(result, .after = last_col())
 
 write_csv(dataset, "matches.csv")
-

@@ -1,9 +1,53 @@
 \documentclass[12pt,paper=letter,leqno]{scrartcl}
 \usepackage[utf8]{inputenc}
 \usepackage[margin=2cm]{geometry}
-\usepackage{makecell,amsmath,amssymb,multirow,float,setspace,mlmodern,lipsum,fancyhdr,lastpage}
+\usepackage{makecell,amsmath,amssymb,multirow,float,setspace,mlmodern,lipsum,fancyhdr,lastpage,hyperref,graphicx,tikz,listings}
 \usepackage[backend=biber, style=authoryear]{biblatex}
-%\addbibresource{Assignment_01.bib}
+\addbibresource{bibliography.bib}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue,
+}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\lstset{
+language=R,   % R code
+literate=
+{á}{{\'a}}1
+{à}{{\`a}}1
+{ã}{{\~a}}1
+{â}{{\^a}}1
+{é}{{\'e}}1
+{ê}{{\^e}}1
+{í}{{\'i}}1
+{ó}{{\'o}}1
+{õ}{{\~o}}1
+{ú}{{\'u}}1
+{ü}{{\"u}}1
+{ç}{{\c{c}}}1
+}
+\lstdefinestyle{felipe}{
+    backgroundcolor=\color{white},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{blue},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{magenta},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
 
 \makeatletter
 \def\@maketitle{%
@@ -31,20 +75,732 @@
 \fancyhead[R]{}
 
 \begin{document}
-\title{\lq\lq Total Football\rq\rq: Predicting Football Match Outcomes Using Machine Learning}
+\title{\lq\lq Total Football\rq\rq: Predicting Football Match Outcomes Using Ensemble Methods}
 \subtitle{STATS9850B: Advanced Data Analysis}
 \author{Bruno Tancredi and Felipe Ferreira}
 \date{April 21$^\text{st}$, 2026}
 \maketitle
 \thispagestyle{fancy}
 \section{Introduction}
-\section{Data set source and detailed description}
-\section{Methods (description of the methods used in both exploratory and main data analysis)}
+The application of statistical methodology in sports analysis is not especially novel: historically, news companies would aggregate the (subjective) opinions of expert panels and the odds reported by various sports betting establishments to predict the outcomes of matches, and at times entire tournaments. In machine learning, ensemble methods work via a very similar principle, computing their predictions by aggregating the outputs of multiple other smaller models.
+
+The goal of this project is to illustrate the practical use of such methods, in particular Random Forests, when predicting the outcomes of football matches between national football teams. In the sections that follow, we describe our dataset, methodology and results, exploring the predictive strength of Random Forests for this particular problem. We thereby conclude with a toy application predicting the results of the upcoming 2026 FIFA World Cup tournament, and suggest potential improvements to our proposed methodology.
+
+\texttt{tidymodels} was chosen for our implementation due to the standardized and coherent workflow it provides, allowing the modeling process to be followed from data preparation to evaluation of predictions. This framework simplifies reproducibility and ensures consistency when fitting and comparing multiple statistical learning methods \parencite{tidymodels}.
+
+\section{Dataset}
+Our dataset was obtained by combining multiple sources, including data from \texttt{Transfermarkt}, \texttt{Kaggle} and \texttt{https://www.eloratings.net/}. \texttt{Transfermarkt} is a website containing information on professional football teams and players, and was used to extract squad market evaluations. \texttt{Kaggle} is an online platform for data science discussion and competitions. We sourced all football match results from the dataset \lq\lq International football results from 1872 to 2026\rq\rq, publicly available \href{https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017}{here}. \texttt{https://www.eloratings.net/} is a website containing the World Football Elo Ratings of all national teams (the Elo rating is a relative measure of skill in competitive activities). The data was scraped using tools made available on \href{https://github.com/JGravier/soccer-elo}{this} GitHub repository. Finally, the collated data is available for public access in \href{https://github.com/brunotancredi/Random-Football-Expert}{this} link. Figure \ref{fig:organization} illustrates the organization of the collected data.
+
+\begin{figure}
+    \centering
+    \begin{tikzpicture}
+        \draw[-latex] (6,4) -- (9,2);
+        \draw[-latex] (6,2) -- (9,2);
+        \draw[-latex] (8,0) -- (9,2) node[draw, anchor = west]{Final Dataset};
+        \draw (3,0) node[draw, anchor = west, align = center, fill = white]{Player market evaluations \\ and ages ($x_3,\ldots,x_{10}$)} -- (0,0) node[draw, anchor = east]{\texttt{Transfermarkt}};
+        \draw[-latex] (0,0) -- (3,0);
+        \draw (3,2) node[draw, anchor = west, align = center, fill = white]{Match results and \\ last 5 games ($y$ and $x_2$)} -- (0,2) node[draw, anchor = east]{\texttt{Kaggle}};
+        \draw[-latex] (0,2) -- (3,2);
+        \draw (3,4) node[draw, anchor = west, align = center, fill = white]{National team \\ Elo ratings ($x_1$)} -- (0,4) node[draw, anchor = east]{\texttt{eloratings}}; 
+        \draw[-latex] (0,4) -- (3,4);
+    \end{tikzpicture}
+    \caption{Representation of the collated data.}
+    \label{fig:organization}
+\end{figure}
+
+The dataset is comprised of $N = 6613$ observations, corresponding to official football matches by national teams played between 2018 and 2026. Each match is structured as \lq\lq\textit{Team A vs. Team B}\rq\rq; by convention, we refer to Team A as the \lq\lq\textit{Home Team}\rq\rq\ and Team B as the \lq\lq\textit{Away Team}\rq\rq. It follows that, for each match, we have an observed categorical outcome variable $y$ which takes one of three values: \lq\lq win\rq\rq\ (indicating the Home team won), \lq\lq lose\rq\rq\ (indicating the Home team lost) and \lq\lq tie\rq\rq. Additionally, we have descriptive statistics of the squads of each Team, for the year previous to that in which the match occurred (e.g. market evaluation of the attackers, Elo rating of the squad). We thereby define our predictors for the result in each match by considering the difference in the descriptive statistics between the two teams, defined as the value of a given attribute for the Home team subtracted by the value of that same attribute for the Away team. In total, we have 10 predictors variables defined in Table \ref{tab:predictors}. We additionally highlight the predictor \lq\lq Last 5 games\rq\rq, which measures the performance of each team in the last 5 games played, such that each victory or tie awards 3 and 1 points for that measure, respectively, whilst losses award 0 points.
+\begin{table}
+    \centering
+    \begin{tabular}{ccc}
+        \hline Symbol & Variable & Unit \\ \hline
+        $y$ & Match result & None \\
+         $x_1$ & Elo rating difference & None \\
+         $x_2$ & Last 5 games difference & None \\
+         $x_3$ & Goalkeeper market value difference & $\text{U}\$$1,000,000\\
+         $x_4$ & Defender market value difference & $\text{U}\$$1,000,000\\
+         $x_5$ & Midfielder market value difference & $\text{U}\$$1,000,000\\
+         $x_6$ & Attacker market value difference & $\text{U}\$$1,000,000\\
+         $x_7$ & Goalkeeper age difference & Years \\
+         $x_8$ & Defender age difference & Years \\
+         $x_9$ & Midfielder age difference & Years \\
+         $x_{10}$ & Attacker age difference & Years \\\hline
+    \end{tabular}
+    \caption{Table of variables in our dataset.}
+    \label{tab:predictors}
+\end{table}
+
+It bears remarking that our dataset contained missing values, which manifested in two manners: for some teams, the market value of players was not available. In those cases, we set the missing values as a minimum market value of $\text{U}\$$100,000. Additionaly, for some national teams entire years had missing values. In those cases, we utilized the squad statistics for the most recent year with complete data.
+
+\section{Methodology}
+
+The goal of this project is to, utilizing the information in our dataset, predict the outcome of national football team matches as one of the three aforementioned possible results. For that purpose, we adopt supervised learning methods for multiclass classification, particularly considering 3 possible classes. We perform brief exploratory analysis of our dataset, with the goal of highlighting potential relationships between our outcome and our predictors, thereafter properly defining our model, and assessing it's predictive capability.
+
+The entire implementation of our model, as well as the exploratory analysis of the dataset, is made available in Appendix B in the form of commented \texttt{R} code. As aforementioned, our implementation relies heavily on the \texttt{tidymodels} framework \parencite{tidymodels}, and a great deal of the visualization tools were constructed utilizing the \texttt{ggplot2} package, part of the \texttt{tidyverse} collection of packages \parencite{tidyverse}.
+
 \section{Results}
-\lipsum[1-20]
 \subsection{Exploratory Data Analysis}
-\subsection{Main Data Analysis}
+
+Figure \ref{fig:ties} depicts the distribution of the outcome classes in our dataset. We observe that, out of all $6613$ matches, 3129 (47.3\%) resulted in a victory for the Home team, 1941 (29.4\%) resulted in a loss for the Home team and 1543 (23.3\%) resulted in a tie. That is, overall 5070 (76.7\%) of the matches did not result in a tie. It is important to remark that the total number of victories and losses is partly defined by the convention adopted initially, as any game that is a win by the Home team may also be counted as a loss from the Away team's perspective. This may seem an inocuous detail, but as in this project we do not work with a model which enforces this symmetrical relationship (that the predicted outcome in a match between two teams should be invariant with respect to which team is the Home team and which team is the Away team), the proportion of representability of each outcome will impact the predictions of our model. Conversely, the greater proportion of Home team wins may be attributed to a known real-life phenomenon where Home teams exhibit better performance than Away teams, which, if true, would imply that the symmetrical relationship need not be enforced. In that case, our model predictions should be interpreted as \lq\lq the outcome assuming this is the Home team\rq\rq.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=.7\linewidth]{report/figures/Ties and not ties.pdf}
+    \caption{Bar count of each possible outcome in our dataset, separated as \lq\lq tie\rq\rq\ or \lq\lq not a tie\rq\rq.}
+    \label{fig:ties}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{report/figures/Boxplots Zoom.pdf}
+    \caption{Boxplots of the market value predictors, zoomed in at the $\text{U}\$$-15,000,00 to $\text{U}\$$15,000,00 range.}
+    \label{fig:zoom}
+\end{figure}
+
+We assessed the correlation between our predictors via a correlogram, seen in Figure \ref{fig:corr}. There is evidence of a strong positive linear relationship between the predictors which measure the market value difference of the players in all positions, as well as between the Elo rating difference and last 5 games difference. Conversely, the predictors which measure the age difference in all positions don't appear to have strong linear relationships with any other predictors, and only moderate linear relationships amongst themselves. Therefore, the data indicates there is some multicolinearity with respect to the market evaluations. Figure \ref{fig:densities} displays the estimated density plots of the predictors in our dataset. Most distributions appear approximately symmetric about zero, and we can likewise highlight the presence of outliers in the distribution of the predictors which measure market value difference. Figure \ref{fig:boxplots} displays boxplots of the predictors separated by the outcome category. For the predictors which measure Elo rating difference and last 5 games difference the category separation is more apparent. Due to the presence of outliers, visually assessing category separability for the market value difference predictors ($x_3,x_4,x_5,x_6$) is complicated, so Figure \ref{fig:zoom} zooms into a smaller range of value for those predictors, allowing us to observe that some class separability is likewise present. Finally, the age difference predictors ($x_7,x_8,x_9,x_{10}$) don't provide as clear evidence of category separability. Based on these results, we propose a simple Random Forest model to perform classification of the match results, based on the predictors herein discussed.
+
+\subsection{Fitting the model}
+
+We split our dataset into two halves: a training dataset comprised of $N_\text{train} = 4959$ observations (roughly $75\%$ of our original dataset) and a test dataset comprised of $N_\text{test} = 1654$ observations. We thereafter apply a Random Forest classification model to the training dataset utilizing the \texttt{rand\_forest()} function of the \texttt{tidymodels} \texttt{R} package. We train 1000 trees as part of our ensemble, and consider two additional model parameters to be tuned:
+\begin{itemize}
+    \item $n_\text{min}$: the minimum number of observations in a node in order for it to be split (we consider values in the set $\{2,\ldots,40\}$).
+    \item $m$: the number of predictors which are sampled at each node split (we consider values in the set $\{1,2,3,4,5\}$).
+\end{itemize}
+The tuning parameters $n_\text{min}$ and $m$ are thereafter determined by performing 10-fold cross validation on the training set. As it would be too time-costly to compute the cross validation metrics for all possible combinations of $n_\text{min}$ and $m$ ($5 \cdot 39 = 195$ combinations), we consider a grid of 20 samples drawn from the latin hypercube of all possible combinations of $n_\text{min}$ and $m$. This grid design ensures that, even if we consider only a subset of all possible combinations, this subset is sufficiently disperse amongst those combinations to act as an approximately exhaustive search. Ultimately, our procedure found that the model with $m = 3$ and $n_\text{min} = 32$ had the best cross validation metric value.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{report/figures/Importance.pdf}
+    \caption{Computed variable importance for each of the predictors.}
+    \label{fig:importance}
+\end{figure}
+
+Based on the fitted Random Forest model, Figure \ref{fig:importance} displays the computed variable importance, which seems to confirm some of the insight gleaned during the Exploratory Data Analysis: in particular, it appears that the last 5 games and Elo rating differences have the highest importance, followed by the market value difference measures, and finally the age difference measures.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.48\linewidth]{report/figures/Train Confusion.pdf}
+    \includegraphics[width=0.48\linewidth]{report/figures/Test Confusion.pdf}
+    \caption{Confusion matrices for the training and testing datasets.}
+    \label{fig:confusion}
+\end{figure}
+
+Figure \ref{fig:confusion} displays the confusion matrices for the fitted model for the training and testing datasets. It follows that the training dataset accuracy was approximately $86.1\%$, whilst the testing dataset accuracy was approximately $66.7\%$, a drop in predictive performance, as is to be expected when transitioning from training to testing. Complementarily, Table \ref{tab:categories} displays the sensitivity, specificity and precision measures for each category, for the training and testing datasets. Again, as is to be expected, the performance metrics are worse across the board for the test dataset, when compared to the training dataset.
+
+\begin{table}[]
+    \centering
+    \begin{tabular}{cccc}
+         \hline Measure & Category & Training Value & Testing Value \\ \hline
+         Sensitivity & lose & $90.7\%$ & $72.7\%$ \\
+         Specificity & lose & $92.8\%$ & $84.6\%$ \\
+         Precision & lose & $83.8\%$ & $67.3\%$ \\
+         Sensitivity & tie & $63.6\%$ & $17.8\%$\\
+         Specificity & tie & $99.1\%$& $90.6\%$ \\
+         Precision & tie & $95.8\%$ & $34.9\%$ \\
+         Sensitivity & win & $94.7\%$ & $85.5\%$ \\
+         Specificity & win & $84.6\%$ & $70.8\%$\\
+         Precision & win & $84.7\%$ & $72.7\%$ \\ \hline
+    \end{tabular}
+    \caption{Sensitivity, specificity and precision measures for each category.}
+    \label{tab:categories}
+\end{table}
+
+We remark that, particularly for the \lq\lq tie\rq\rq\ category, the precision and sensitivity measures suffers significantly. To illustrate this, note that (using the test confusion matrix as reference point) the probability that an observation truly is a tie given that we predicted it is a tie is approximately $65/186 \approx 34.9\%$; conversely, the probability that an observation is a loss given that we predicted it is a tie is approximately $64/186 \approx 34.4\%$, a value only slightly higher than the former. That is, although the most likely outcome given our prediction is still correct, it is only so barely. The performance drop-off for the \lq\lq win\rq\rq\ and \lq\lq lose\rq\rq\ categories, on the other hand, is not as flagrant. This, quite clearly, indicates our model tends to predict the \lq\lq tie\rq\rq\ class poorly, albeit it still presents good performance for non-tie results. This is expected: see that in Figure \ref{fig:boxplots} the distribution of our predictors, stratified by the result categories, indicates that the \lq\lq tie\rq\rq\ category overlaps simultaneously with the \lq\lq win\rq\rq\ and \lq\lq lose\rq\rq\ categories, whilst these two don't overlap as significantly with each other.
+
+Finally, we utilize Cohen's Kappa to determine the quality of our predictions. Cohen's Kappa is a statistical measurement of agreement between two categorical variables, taking values between $[-1,+1]$, where $-1$ indicates the variables are in complete disagreement, whilst $+1$ indicates the variables are in complete agreement, with intermediate values indicating intermediate degrees of agreement. It is available via the function \texttt{cohen.kappa()} on the \texttt{psych} \texttt{R} package. In particular, we will be verifying the degree of agreement between the true match results and the predicted match results using our Random Forest model. It follows that, for the training dataset, we obtain a Cohen's Kappa of 0.78, whilst for the test dataset it was 0.45. This indicates that, even though the accuracy of our predictions is smaller for the test dataset compared to the training dataset, the model is capable of yielding predictions which match the truth.
+
+\subsection{2026 FIFA World Cup predictions}
+
+Utilizing the model fit in the previous section, we now attempt to predict the results of the 2026 FIFA World Cup. Consider that, based on the dataset we have gathered, for all 48 nations participating in the 2026 FIFA World Cup, we have the results of the last 5 games (as of December 2025), the most recent Elo rating, the market evaluation of players in all positions, and the average age of players in all positions (based on the most recent squad configuration). Based on the most recent data, we will use our Random Forest model to predict the result of each match-up in the World Cup, and thereby conclude with a prediction of which national team will win the tourney.
+
+48 nations are scheduled to participate in this World Cup. Initially, each nation is sorted into one of 12 groups, such that each group is composed of 4 nations. During the Group Stage, each nation plays a game against each of its competitors within the same group, earning 3 points in case of a victory, 1 point in case of a tie and 0 in case of a loss. For each group, the two teams with the highest amount of points will advance into the next stage. Additionally, the eight best-scoring teams in third place will advance. Once the Group Stage is over, each team faces off against advancing teams from other groups in a systematic order in a series of knockout stages, though the exact organization of the knockout stages will not be further explained in this section for simplicity. For our model, during the knockout stages, as ties are not viable, we simply choose which outcome has higher probability, \lq\lq win\rq\rq\ or \lq\lq lose\rq\rq. Additionally, as the Home team is shown to have \lq\lq advantage\rq\rq, that is, the model is more likely to predict that the Home team wins, before every match prediction the model chooses randomly which team is to be considered the Home team, with equal probability for either case.
+
+Figure \ref{fig:matchup} displays the final standing of the World Cup, based on the model fit on the previous section, starting at the Quarter Finals. Ultimately, the model indicates that England will win the 2026 FIFA World Cup, whilst Spain will be the runner-up. Countries like France, Japan, Argentina, Colombia, Turkey and the Netherlands rank highly, as well. These partial results align somewhat with current expectations for the World Cup: albeit England is not currently positioned as favourite, it, as well as Spain, France and Argentina are countries expected to perform well. Some results do appear to be in contravention of what is expected, as is the case in a match-up between Brazil and Japan (not depicted in Figure \ref{fig:matchup}), which Japan is predicted to win, according to our model, which may indicate the model is not entirely adequate, although we should mostly emphasize the prediction of the overall winner, and not so much partial results.
+
+\begin{figure}
+    \centering
+    \begin{tikzpicture}
+        \draw (.5,0) -- (3,0);
+        \draw (-.5,0) -- (-3,0);
+        \draw (-.5,0) node[anchor=east,draw,red,fill=white]{Spain};
+        \draw (.5,0) node[anchor=west,draw,blue,fill=white]{England};
+        \draw (-.5,0) -- (.5,0);
+
+        \draw (3,2) -- (3,-2);
+        \draw (6,-2) -- (3,-2);
+        \draw (6,2) -- (3,2);
+        \draw (3,2) node[draw,blue,fill=white]{England};
+        \draw (3,-2) node[draw,red,fill=white]{France};
+
+        \draw (-3,2) -- (-3,-2);
+        \draw (-6,-2) -- (-3,-2);
+        \draw (-6,2) -- (-3,2);
+        \draw (-3,2) node[draw,blue,fill=white]{Spain};
+        \draw (-3,-2) node[draw,red,fill=white]{Colombia};
+
+        \draw (-6,1) -- (-6,3);
+        \draw (-6,1) node[draw,red,fill=white]{Turkey};
+        \draw (-6,3) node[draw,blue,fill=white]{Spain};
+
+        \draw (-6,-3) -- (-6,-1);
+        \draw (-6,-3) node[draw,red,fill=white]{Argentina};
+        \draw (-6,-1) node[draw,blue,fill=white]{Colombia};
+
+        \draw (6,1) -- (6,3);
+        \draw (6,1) node[draw,red,fill=white]{Netherlands};
+        \draw (6,3) node[draw,blue,fill=white]{England};
+
+        \draw (6,-3) -- (6,-1);
+        \draw (6,-3) node[draw,red,fill=white]{Japan};
+        \draw (6,-1) node[draw,blue,fill=white]{France};
+
+        \draw[dashed] (4.5,-4) -- (4.5,4);
+        \draw[dashed] (-4.5,-4) -- (-4.5,4);
+
+        \draw[dashed] (-2.5,-1.5) -- (-2.5,1.5);
+        \draw[dashed] (2.5,-1.5) -- (2.5,1.5);
+    \end{tikzpicture}
+    \caption{Predicted World Cup match results starting at the Quarter Finals. Teams highlighted in red lose and are eliminated, whilst teams hihglighted in blue win and advance onto the next stage. The vertical dashed lines represent the transition from Quarter Final, to Semi Final, to Final.}
+    \label{fig:matchup}
+\end{figure}
+
 \section{Conclusion/Discussion}
-\section{References}
-\section{Appendix}
+
+Random Forests prove to be an efficient and simple tool for classification, even in complicated contexts, such as the prediction of football match outcomes. In this report, we explored a data set collected and organized by ourselves with the purpose of exploring the relationship between a set of publicly available predictors and the outcomes of football matches between national teams, thereafter applying our results to the upcoming 2026 FIFA World Cup. In spite of the many restrictions of this project, with respect to its scope, timeframe and the data to which we had access, Random Forests still proved to perform well in this classification task, in spite of the relatively small amount of tuning done. It likewise proves, in practice, to work as a good foundational model for prediction based tasks which extend toward more complicated goals, such as is the case in this report, where we attempt to extend our predictions from individuals games to an entire tourney --- results that may yet prove to be accurate in the coming months. Through the joint application of modelling and exploratory data analysis tools, we were likewise able to ascertain idiosyncrasies of our data which were reflected on the fitted model, which may provide guidance on what we should we be aware of when next performing tasks of this nature, and potential points of improvement.
+
+For future work we would suggest models which enforce a symmetric relationship to ensure that the predicted result for a match between two teams is invariant with respect to which team is considered the Home team. Likewise, we could consider exploring different sampling designs for our training and test datasets, so as to avoid underrepresentation of \lq\lq tie\rq\rq\ results, which may improve model accuracy. Likewise, note that the model we fit was determined with the goal of predicting each individual game. Though that may appear counter-intuitive, the model which best predicts each individual game may not be best at predicting the overall victor: a more interesting modification of our model would be to explore other loss functions choices with the goal of predicting the overall placements in a football tourney, utilizing previous events (such as World Cups or national leagues) to fit and test our model.
+
+\printbibliography
+
+\section*{Appendix A: Figures}\label{sec:figures}
+This section of the report presents three figures which were ommitted from the main report for the Exploratory Data Analysis section, though they are still referenced on the body of the report.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=.8\linewidth]{report/figures/Corr.pdf}
+    \caption{Correlogram of our predictors.}
+    \label{fig:corr}
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[scale=1,angle=90]{report/figures/Densities.pdf}
+\caption{Density plots of the predictors in our dataset.}\label{fig:densities}
+\end{figure}
+\begin{figure}[H]
+\centering
+\includegraphics[scale=1,angle=90]{report/figures/Boxplots.pdf}
+\caption{Boxplot of the predictors in our dataset separated by outcome category.}\label{fig:boxplots}
+\end{figure}
+\section*{Appendix B: Code}\label{sec:code}
+The listing below includes all the code utilized as part of this project:
+\lstset{style=felipe}
+\begin{lstlisting}[language=R, frame=single]
+## Name: Bruno Tancredi and Felipe Ferreira
+## Course: STATS9850B - Advanced Data Analysis
+## Instructor: Guowen Huang
+## Term: Winter 2026
+
+library(tidyverse)
+library(tidymodels)
+library(doParallel)
+library(vip) 
+
+set.seed(123)
+
+#Load matches 
+#To check how the dataset was build look github repository
+matches <- read_csv("matches.csv")
+
+#For the covariates use the differences between the home team and away team
+matches <- matches |>
+  mutate(elo_rating_diff = home_elo_rating - away_elo_rating,
+         last_5_games_diff = home_team_last_5_games - away_team_last_5_games,
+         goalkeeper_market_value_diff = (home_goalkeeper_market_value - away_goalkeeper_market_value)/(10**6),
+         defender_market_value_diff = (home_defender_market_value - away_defender_market_value)/(10**6),
+         midfielder_marker_value_diff = (home_midfielder_market_value - away_midfielder_market_value)/(10**6),
+         attacker_market_value_diff = (home_attacker_market_value - away_attacker_market_value)/(10**6),
+         goalkeeper_age_diff = home_goalkeeper_age - away_goalkeeper_age,
+         defender_age_diff = home_defender_age - away_defender_age,
+         midfielder_age_diff = home_midfielder_age - away_midfielder_age,
+         attacker_age_diff = home_attacker_age - away_attacker_age) |>
+  select(date, 
+         home_team, 
+         away_team, 
+         ends_with("diff"),
+         result)
+
+
+######### Modelling ########## 
+
+#Train/Test Split
+split <- initial_split(matches)
+train <- training(split)
+test <- testing(split)
+
+#Define model (Random Forest)
+rf_model <-
+  rand_forest(
+    mtry = tune(), #Number of selected variables
+    trees = 1000,
+    min_n = tune() #the number of observations needed to keep splitting nodes
+  ) |>
+  set_mode("classification") |>
+  set_engine("ranger",
+             importance = "impurity")
+
+#Formula and set variables as ID so they're not used as predictors
+rf_recipe <- recipe(result ~ ., data = train) |>
+  update_role(date, new_role = "ID") |>
+  update_role(home_team, new_role = "ID") |>
+  update_role(away_team, new_role = "ID")
+  
+#Tidymodel concept
+rf_workflow <- workflow() |>
+  add_recipe(rf_recipe) |>
+  add_model(rf_model) 
+
+#Cross-Validation  
+rf_folds <- vfold_cv(train, v = 10)
+
+#Latin Hypercubes to build search space [grid]
+rf_grid <- grid_latin_hypercube(
+  mtry(c(1, 5)), #mtry vary between 1 
+  min_n(),
+  size = 20
+)
+
+#Parallelize the model tunning
+cl <- makeCluster(15)
+registerDoParallel(cl) 
+
+#Run the cross validation
+rf_tune_res <- tune_grid(
+  rf_workflow,
+  resamples = rf_folds,
+  grid = rf_grid,
+  control = control_resamples(save_pred = TRUE, save_workflow = TRUE)
+)
+
+#Choose the best
+rf_best <- select_best(rf_tune_res, metric = "brier_class")
+
+rf_workflow <- rf_workflow |> finalize_workflow(rf_best)
+
+#Fit the rf with the best parameters
+rf_fit <- fit(rf_workflow, train)
+
+#Predict train
+train_with_predictions <- augment(rf_fit, train) |>
+  mutate(
+    result = as.factor(result),
+    .pred_class = as.factor(.pred_class)
+  )
+
+accuracy(
+  train_with_predictions,
+  truth = result,
+  estimate = .pred_class
+)
+
+#Confusion Matrix
+conf_mat(
+  train_with_predictions,
+  truth = result,
+  estimate = .pred_class
+) -> confTrain
+
+
+confTrain$table |> psych::cohen.kappa()
+
+confTrain |> autoplot(type = "heatmap") +
+  labs(title = "Train Confusion Matrix") -> trainConf
+
+ggsave(filename = "Train Confusion.pdf", plot = trainConf,
+       width = 2.5, height = 2)
+
+#Predict test
+test_with_predictions <- augment(rf_fit, test) |>
+  mutate(
+    result = as.factor(result),
+    .pred_class = as.factor(.pred_class)
+)
+
+accuracy(
+  test_with_predictions,
+  truth = result,
+  estimate = .pred_class
+) 
+
+#Confusion Matrix
+conf_mat(
+  test_with_predictions,
+  truth = result,
+  estimate = .pred_class
+) -> confTest
+
+confTest$table |> psych::cohen.kappa()
+
+confTest |> autoplot(type = "heatmap") +
+  labs(title = "Test Confusion Matrix") -> testConf
+
+ggsave(filename = "Test Confusion.pdf", plot = testConf,
+       width = 2.5, height = 2)
+
+#Variable importance
+importance <- extract_fit_parsnip(rf_fit)
+vip(importance) +
+  theme_classic() -> importancePlot
+
+ggsave(filename = "Importance.pdf", plot = importancePlot,
+       width = 4, height = 2)
+######### End of modelling ########## 
+
+######### World Cup Simulation ########
+library(tidyverse)
+library(zoo)
+library(purrr)
+
+nationalTeams <- 
+  c("Mexico",                   #A
+    "South Africa",             #A
+    "South Korea",              #A
+    "Czech Republic",           #A
+    "Canada",                   #B
+    "Bosnia and Herzegovina",   #B
+    "Qatar",                    #B
+    "Switzerland",              #B
+    "Brazil",                   #C
+    "Morocco",                  #C
+    "Haiti",                    #C
+    "Scotland",                 #C
+    "United States",            #D
+    "Paraguay",                 #D
+    "Australia",                #D
+    "Turkey",                   #D
+    "Germany",                  #E
+    "Curaçao",                  #E
+    "Ivory Coast",              #E
+    "Ecuador",                  #E
+    "Netherlands",              #F
+    "Japan",                    #F
+    "Sweden",                   #F
+    "Tunisia",                  #F
+    "Belgium",                  #G
+    "Egypt",                    #G
+    "Iran",                     #G
+    "New Zealand",              #G
+    "Spain",                    #H
+    "Cape Verde",               #H
+    "Saudi Arabia",             #H
+    "Uruguay",                  #H
+    "France",                   #I
+    "Senegal",                  #I
+    "Iraq",                     #I
+    "Norway",                   #I
+    "Argentina",                #J
+    "Algeria",                  #J
+    "Austria",                  #J
+    "Jordan",                   #J
+    "Portugal",                 #K
+    "DR Congo",                 #K
+    "Uzbekistan",               #K
+    "Colombia",                 #K
+    "England",                  #L
+    "Croatia",                  #L
+    "Ghana",                    #L
+    "Panama")                   #L
+
+
+######### Build the worldcup dataset 
+
+#A dataset with the same structure used on the model with all possible matches (combinations of all teams)
+possible_matches <-  expand.grid( #Create all possible matches
+  home_team = nationalTeams,
+  away_team = nationalTeams
+)
+
+possible_matches$date <- "2026-06-01" #For date the important thing is that is in 2026 and after previous matches
+possible_matches$result <- "tie" #dummy result 
+
+
+matches <- read_csv("data/results.csv")
+head(matches)
+
+dataset <- matches |> 
+  filter(date >= '2018-01-01') |> #We want to work only with recent years
+  distinct(home_team, date, .keep_all = TRUE) |> #Fiji has two matches on the same day
+  distinct(away_team, date, .keep_all = TRUE) |> #Saint Kitts and Nevis has two matches on the same day
+  mutate(
+    result = case_when(
+      home_score > away_score ~ "win",
+      home_score == away_score ~ "tie",
+      TRUE ~ "lose"
+    ), #Define result column as response: win -> home_team won the match and so on.
+    result = factor(result)
+  ) |>
+  select(date, home_team, away_team, result) #We only care about this covariates.
+
+dataset <- rbind(dataset, possible_matches)
+
+points <- dataset |>
+  distinct(home_team, date, .keep_all = TRUE) |>
+  mutate(
+    home_points = case_when(
+      result == "win" ~ 3, 
+      result == "tie" ~ 1,
+      TRUE ~ 0
+    )
+  ) |>
+  select(-result) |>
+  pivot_longer(
+    c(home_team, away_team),
+    names_to = "role",
+    values_to = "country"
+  ) |> #We split each row in one role for the home team and one row for the away team
+  mutate(
+    points = case_when( #For the away team we need to invert the points
+      role == "away_team" & home_points == 3 ~ 0, 
+      role == "away_team" & home_points == 0 ~ 3, 
+      TRUE ~ home_points
+    )
+  ) |>
+  select(date, country, points) |>
+  distinct()
+
+#We sum the points of the last 5 games, when we don't have 5 games we fill with NA
+points_last_five_games <- points |>
+  arrange(country, date) |> 
+  group_by(country) |>
+  mutate(last_five = rollsumr(points, k = 5, fill = NA)) |> #Make the sum
+  select(country, date, last_five)
+
+#Add the calculated points to the dataset
+dataset <- dataset |>
+  inner_join(points_last_five_games, 
+             by = join_by(home_team == country, date == date)) |> #get the home_team points
+  rename(home_team_last_5_games = last_five) |>
+  inner_join(points_last_five_games, 
+             by = join_by(away_team == country, date == date)) |> #get the away_team points
+  rename(away_team_last_5_games = last_five) |>
+  drop_na()
+
+dataset <- dataset |>
+  filter(date >= '2026-06-01')
+
+elo_rating <- read_csv("data/elo_rating.csv") |>
+  mutate(team = recode(team,
+                       "Czechia" = "Czech Republic")) |>
+  select(year, team, rating)
+
+elo_rating <- elo_rating |>
+  mutate(year = year + 1) |>
+  select(year, team, rating)
+
+dataset <- dataset |> 
+  mutate(year = year(date)) |> 
+  inner_join(elo_rating, 
+             by = join_by(home_team == team, year == year)) |>
+  mutate(home_elo_rating = rating) |>
+  select(-c(rating)) |>
+  inner_join(elo_rating, 
+             by = join_by(away_team == team, year == year)) |>
+  mutate(away_elo_rating = rating) |>
+  select(-c(year,rating)) 
+
+transfermarkt <- read_csv("data/transfermarkt.csv") 
+dataset <- dataset |> 
+  mutate(year = year(date)) |> 
+  inner_join(
+    transfermarkt |>
+      rename_with(~ paste0("home_", .x), -c(country,year)), 
+    by = join_by(home_team == country, year == year)) |>
+  inner_join(
+    transfermarkt |>
+      rename_with(~ paste0("away_", .x), -c(country,year)), 
+    by = join_by(away_team == country, year == year)) |>
+  select(-c(year))
+
+#Constructing the dataset for World Cup prediction
+dataset <- dataset |>
+  mutate(elo_rating_diff = home_elo_rating - away_elo_rating,
+         last_5_games_diff = home_team_last_5_games - away_team_last_5_games,
+         goalkeeper_market_value_diff = home_goalkeeper_market_value - away_goalkeeper_market_value,
+         defender_market_value_diff = home_defender_market_value - away_defender_market_value,
+         midfielder_marker_value_diff = home_midfielder_market_value - away_midfielder_market_value,
+         attacker_market_value_diff = home_attacker_market_value - away_attacker_market_value,
+         goalkeeper_age_diff = home_goalkeeper_age - away_goalkeeper_age,
+         defender_age_diff = home_defender_age - away_defender_age,
+         midfielder_age_diff = home_midfielder_age - away_midfielder_age,
+         attacker_age_diff = home_attacker_age - away_attacker_age) |>
+  select(date, 
+         home_team, 
+         away_team, 
+         ends_with("diff"),
+         result)
+#####
+
+#Given two teams, get the result (points: 3 is win, 1 tie, 0 loss)
+predictMatch <- function(team_1, team_2){
+  
+  #Since our model has preference for the local team, sort to get different results.
+  p <- rbinom(1, 1, 0.5)
+  
+  if(p < 0.5){
+    ht <- team_1
+    at <- team_2
+  }
+  else{
+    ht <- team_2
+    at <- team_1
+  }
+
+  #From the dataset with all the matches get the corresponding match.
+  observation <- dataset |> 
+    filter(home_team == ht, away_team == at)
+  
+  prediction <- predict(model, observation)
+  
+  if(prediction == "win"){
+    result <- c(3,0) 
+  }else if(prediction == "tie"){
+    result <- c(1,1)
+  }else{
+    result <- c(0,3)
+  }
+  
+  data.frame(country = c(ht, at), result)
+}
+
+predictMatch("Australia", "Uruguay")
+
+
+############ PREDICT GROUP STAGE ################
+groups <- lapply(split(nationalTeams, rep(LETTERS[1:12], each = 4)), as.vector)
+g <- lapply(groups, function(x){
+  matches <- combn(x,2)
+  results <- apply(matches, 2, function(m){
+    predictMatch(m[[1]], m[[2]])
+  })
+  #browser()
+  results <- do.call(rbind, results)
+  #Sum all the points by team for the group
+  results <- as.data.frame(results) |> 
+    group_by(country) |>
+    summarise(points = sum(result)) |>
+    arrange(desc(points)) |>
+    select(country)
+  results[1:3,]
+})
+
+group_stage <- do.call(cbind, g) 
+colnames(group_stage) <- LETTERS[1:12]
+
+#Final dataset 12x3 with the 3 best teams on each group
+group_stage <- t(group_stage)
+
+##################################################
+
+create_round_of_32  <- function(x) {
+  rownames(x) <- LETTERS[1:12]
+  colnames(x) <- c("W", "RU", "T")
+  
+  team <- function(g, place) x[g, place]
+  
+  # sample 8 third-place groups at random (not all 3rd places goes to next round)
+  third_groups <- sample(LETTERS[1:12], 8)
+  
+  data.frame(
+    match = paste0("M", 73:88),
+    team_1 = c(
+      team("A","RU"), team("E","W"),  team("F","W"),  team("C","W"),
+      team("I","W"),  team("E","RU"), team("A","W"),  team("L","W"),
+      team("D","W"),  team("G","W"),  team("K","RU"), team("H","W"),
+      team("B","W"),  team("D","RU"), team("J","W"),  team("K","W")
+    ),
+    team_2 = c(
+      team("B","RU"),
+      team(third_groups[1], "T"),
+      team("C","RU"),
+      team("F","RU"),
+      team(third_groups[2], "T"),
+      team("I","RU"),
+      team(third_groups[3], "T"),
+      team(third_groups[4], "T"),
+      team(third_groups[5], "T"),
+      team(third_groups[6], "T"),
+      team("L","RU"),
+      team("J","RU"),
+      team(third_groups[7], "T"),
+      team("G","RU"),
+      team("H","RU"),
+      team(third_groups[8], "T")
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+#Function that given two teams says who goes to the next round
+predictWhoGoNextStage <- function(team_1, team_2){
+  result <- predictMatch(team_1, team_2)
+  if(result[result$country == team_1, 2] == 3){
+    team_1
+  }else if(result[result$country == team_1, 2] == 1){
+    sample(c(team_1, team_2), 1) #On tie choose 1 by random
+  }else{
+    team_2
+  }
+}
+
+r32 <- create_round_of_32(group_stage)
+#Get the ones that classify to the next round
+r32_winners <- apply(r32, 1, function(x){
+   predictWhoGoNextStage(x["team_1"], x["team_2"])
+})
+
+names(r32_winners) <- r32$match
+
+#For round 16, quarter-finals, semifinals the logic is the same:
+#Build the bracket
+#Predict who goes to the next stage
+
+#Build the bracket
+r16 = data.frame(
+  match = paste0("M", 89:96),
+  team_1 = c(r32_winners["M73"], r32_winners["M74"], r32_winners["M76"], r32_winners["M79"],
+           r32_winners["M83"], r32_winners["M81"], r32_winners["M86"], r32_winners["M85"]),
+  team_2 = c(r32_winners["M75"], r32_winners["M77"], r32_winners["M78"], r32_winners["M80"],
+           r32_winners["M84"], r32_winners["M82"], r32_winners["M88"], r32_winners["M87"])
+)
+
+#Predict who goes to the next stage
+r16_winners <- apply(r16, 1, function(x){
+  predictWhoGoNextStage(x["team_1"], x["team_2"])
+})
+names(r16_winners) <- r16$match
+
+
+qf = data.frame(
+  match = paste0("M", 97:100),
+  team_1 = c(r16_winners["M89"], r16_winners["M91"], r16_winners["M93"], r16_winners["M95"]),
+  team_2 = c(r16_winners["M90"], r16_winners["M92"], r16_winners["M94"], r16_winners["M96"])
+)
+qf_winners <- apply(qf, 1, function(x){
+  predictWhoGoNextStage(x["team_1"], x["team_2"])
+})
+names(qf_winners) <- qf$match
+
+
+sf = data.frame(
+  match = paste0("M", 100:101),
+  team_1 = c(qf_winners["M97"], qf_winners["M99"]),
+  team_2 = c(qf_winners["M98"], qf_winners["M100"])
+)
+sf_winners <- apply(sf, 1, function(x){
+  predictWhoGoNextStage(x["team_1"], x["team_2"])
+})
+names(sf_winners) <- sf$match
+
+final <-  predictWhoGoNextStage(sf_winners["M100"], sf_winners["M101"])
+print(sprintf("And the world cup goes too ... %s", final[1]))
+###### End of World Cup Simulation ########
+
+\end{lstlisting}
 \end{document}

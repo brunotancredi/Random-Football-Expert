@@ -103,3 +103,4 @@ accuracy(
 #Variable importance
 importance <- extract_fit_parsnip(rf_fit)
 vip(importance)
+saveRDS(rf_fit, "model.rds")
